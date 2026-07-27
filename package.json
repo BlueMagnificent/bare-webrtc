@@ -1,0 +1,41 @@
+{
+  "name": "bare-webrtc",
+  "version": "1.0.0",
+  "description": "A basic WebRTC setup",
+  "type": "module",
+  "main": "server/server.js",
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "server": "node --env-file=.env server/server.js",
+    "client": "vite",
+    "build": "vite build --outDir ../public --assetsDir js --emptyOutDir",
+    "start": "npm run build && npm run server",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "webrtc",
+    "react",
+    "express",
+    "websocket"
+  ],
+  "dependencies": {
+    "express": "^5.2.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "ws": "^8.21.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitejs/plugin-react": "^6.0.4",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.8.0",
+    "prettier": "^3.9.6",
+    "vite": "^8.1.5"
+  }
+}
