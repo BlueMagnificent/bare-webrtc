@@ -44,7 +44,7 @@ const run = async () => {
 
               const peerName = data.name;
               peer.peerName = peerName;
-              accept();
+              accept({peerId});
 
               for (const p of onlinePeers.values()) {
                 if (p.id != peerId) {
@@ -59,9 +59,31 @@ const run = async () => {
 
               break;
             }
+            case 'CONNECT_TO_PEER': {
+              const { otherPeerId } = data;
+
+              const otherPeer = onlinePeers.get(otherPeerId);
+
+              if (!otherPeer) {
+                reject('peer not found');
+                return;
+              }
+
+              await otherPeer.socket.request('PEER_CONNECTION_REQUESTED', {
+                otherPeerId: peerId,
+                otherPeerName: peer.peerName,
+              });
+
+              accept();
+
+              break;
+            }
+            default: {
+              console.log('Unknown request method: ' + method);
+              reject('invalid request method');
+            }
           }
 
-          reject('invalid request');
         } catch (err) {
           console.log(err);
           reject('request failure');

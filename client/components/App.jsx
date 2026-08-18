@@ -3,6 +3,7 @@ import SockRR from '../sockrr-client';
 import { generateName } from '../random-name';
 import { Peer } from './Peer';
 import { OnlinePeers } from './OnlinePeers';
+import { OtherPeer } from './OtherPeer';
 
 
 const iceServers = [
@@ -23,63 +24,41 @@ const sortFunc = ({ peerName: a }, { peerName: b }) => {
   return 0;
 };
 
+const onlinePeers = new Map();
+
 export const App = () => {
-  const [selfName, setSelfName] = useState('');
-  const [otherPeerName] = useState('');
+  const [peerName, setPeerName] = useState('');
   const [selectedPeerId, setSelectedPeerId] = useState('');
   const [onlinePeersState, setOnlinePeersState] = useState([]);
+  const [connectedPeers, setConnectedPeers] = useState([]);
 
-  const onlinePeersRef = useRef(new Map());
-  const selfVideoRef = useRef(null);
-  const otherPeerVideoRef = useRef(null);
-  const otherPeerAudioRef = useRef(null);
+  const socketMessageHandlers = useRef(null);
+
+  if(socketMessageHandlers.current === null) {
+    socketMessageHandlers.current = new Map();
+  }
+
+  const peerVideoRef = useRef(null);
 
   const pcRef = useRef(null);
-  const otherPeerIdRef = useRef(null);
+  const otherPeerRef = useRef(null);
   const srrRef = useRef(null);
   const localStreamRef = useRef(null);
 
-  const updateOnlinePeersState = useCallback(() => {
-    setOnlinePeersState(
-      onlinePeersRef.current.size > 0
-        ? Array.from(onlinePeersRef.current.values()).sort(sortFunc)
-        : []
-    );
+  const subscribeToSignalling = useCallback((peerId, handler) => {
+    socketMessageHandlers.current.set(peerId, handler);
   }, []);
 
-  const createPeerConnection = useCallback(async () => {
-    if (pcRef.current) pcRef.current.close();
+  const unSuscribeFromSignalling = useCallback((peerId) => {
+    socketMessageHandlers.current.delete(peerId);
+  }, []);
 
-    const pc = pcRef.current = new RTCPeerConnection({iceServers});
-    const localStream = localStreamRef.current;
-
-    if (localStream)
-      localStream
-        .getTracks()
-        .forEach((track) => pc.addTrack(track, localStream));
-
-    pc.onicecandidate = (event) => {
-      if (!otherPeerIdRef.current || !srrRef.current) return;
-
-      srrRef.current.notify('WEBRTC_ICE_CANDIDATE', {
-        candidate: event.candidate,
-        otherPeerId: otherPeerIdRef.current,
-      });
-    };
-
-    pc.oniceconnectionstatechange = (event) => {
-      if (pcRef.current) {
-        console.log(`ICE state: ${pcRef.current.iceConnectionState}`);
-        console.log('ICE state change event: ', event);
-      }
-    };
-
-    pc.ontrack = (event) => {
-      if (otherPeerVideoRef.current)
-        otherPeerVideoRef.current.srcObject = event.streams[0];
-    };
-
-    return pc;
+  const updateOnlinePeersState = useCallback(() => {
+    setOnlinePeersState(
+      onlinePeers.size > 0
+        ? Array.from(onlinePeers.values()).sort(sortFunc)
+        : []
+    );
   }, []);
 
   const onSocketNotification = useCallback(
@@ -93,7 +72,7 @@ export const App = () => {
         case 'NEW_PEER': {
           const { peerId, peerName } = data;
 
-          onlinePeersRef.current.set(peerId, { peerId, peerName });
+          onlinePeers.set(peerId, { peerId, peerName });
           updateOnlinePeersState();
 
           break;
@@ -102,68 +81,81 @@ export const App = () => {
         case 'PEER_LEFT': {
           const { peerId } = data;
 
-          onlinePeersRef.current.delete(peerId);
+          if(otherPeerRef.current && otherPeerRef.current.peerId === peerId) {
+            otherPeerRef.current = null;
+
+            if (pcRef.current) pcRef.current.close();
+          }
+
+          onlinePeers.delete(peerId);
           updateOnlinePeersState();
           break;
         }
 
-        case 'WEBRTC_OFFER': {
-          const { offer, otherPeerId } = data;
-
-          try {
-            const pc = await createPeerConnection();
-
-            await pc.setRemoteDescription(offer);
-
-            const desc = await pc.createAnswer();
-
-            await pc.setLocalDescription(desc);
-
-            srrRef.current.notify('WEBRTC_ANSWER', {
-              answer: desc,
-              otherPeerId,
-            });
-            otherPeerIdRef.current = otherPeerId;
-          } catch (err) {
-            console.error('"WEBRTC_OFFER" notification error: ', err);
-          }
-
-          break;
-        }
-
-        case 'WEBRTC_ANSWER': {
-          const { answer, otherPeerId } = data;
-
-          if (otherPeerIdRef.current !== otherPeerId || !pcRef.current) return;
-
-          pcRef.current
-            .setRemoteDescription(answer)
-            .then(() => console.log('remote description set sucessfully'))
-            .catch((err) =>
-              console.log(`failed to set remote description: ${err.toString()}`)
-            );
-
-          break;
-        }
-
+        case 'WEBRTC_OFFER':
+        case 'WEBRTC_ANSWER':
         case 'WEBRTC_ICE_CANDIDATE': {
-          const { candidate, otherPeerId } = data;
+          const { otherPeerId } = data;
 
-          if (otherPeerIdRef.current !== otherPeerId) return;
+          const otherPeerMessageHandler = socketMessageHandlers.current.get(otherPeerId);
 
-          if (!pcRef.current || !candidate) return;
-
-          pcRef.current
-            .addIceCandidate(candidate)
-            .then(() => console.log('ice candidate successfully added'))
-            .catch((err) => console.log('failed to add ice candidate: ', err));
+          if(!otherPeerMessageHandler) {
+            console.error(`No message handler found for other peer: ${otherPeerId}`);
+            return;
+          }
+          
+          await otherPeerMessageHandler(method, data);
 
           break;
+        }
+        
+        default: {
+          console.error('Unknown notification method: ' + method);
         }
       }
     },
-    [createPeerConnection, updateOnlinePeersState]
+    [updateOnlinePeersState]
   );
+
+  const onSocketRequest = useCallback(async (method, data, accept, reject) => {
+    try {
+      console.log(
+        'request received with method: ' + method + ' and data: ',
+        data
+      );
+      
+      switch (method) {
+        case 'PEER_CONNECTION_REQUESTED': {
+          const { otherPeerId } = data;
+
+          // Ensure that the peer requesting connection exists in the onlinePeers map
+          const requestingPeer = onlinePeers.get(otherPeerId);
+          if (!requestingPeer) {
+            console.error(`Peer with ID ${otherPeerId} requesting connection not found in onlinePeers.`);
+            reject('peer not found');
+            return;
+          }
+
+          setConnectedPeers((prevConnectedPeers) => {
+            const updatedConnectedPeers = [...prevConnectedPeers, {otherPeerId, otherPeerName: requestingPeer.peerName, isPcSendingOffer: false}];
+            return updatedConnectedPeers;
+          });
+
+          accept();
+          break;
+        }
+        
+        default: {
+          console.error('Unknown request method: ' + method);
+          reject('invalid request method');
+        }
+      }
+    }
+    catch (err) {
+      console.log(err);
+      reject('request failure');
+    }
+  }, []);
 
   const changeCheckBoxValue = useCallback((peerId, newValue) => {
     if (newValue) setSelectedPeerId(peerId);
@@ -173,25 +165,39 @@ export const App = () => {
   const connectToSelectedPeer = useCallback(async () => {
     if (!selectedPeerId || selectedPeerId == '') return;
 
-    const selectedPeer = onlinePeersRef.current.get(selectedPeerId);
+    const selectedPeer = onlinePeers.get(selectedPeerId);
 
     if (!selectedPeer) return;
 
     try {
-      const pc = await createPeerConnection();
-      const desc = await pc.createOffer();
 
-      await pc.setLocalDescription(desc);
-
-      srrRef.current.notify('WEBRTC_OFFER', {
-        offer: desc,
+      await srrRef.current.request('CONNECT_TO_PEER', {
         otherPeerId: selectedPeer.peerId,
       });
-      otherPeerIdRef.current = selectedPeer.peerId;
+
+      setConnectedPeers((prevConnectedPeers) => {
+        const updatedConnectedPeers = [...prevConnectedPeers, {otherPeerId: selectedPeer.peerId, otherPeerName: selectedPeer.peerName, isPcSendingOffer: true}];
+        return updatedConnectedPeers;
+      });
+      
     } catch (err) {
       console.error('App::connectToSelectedPeer | error:', err);
     }
-  }, [createPeerConnection, selectedPeerId]);
+  }, [selectedPeerId]);
+
+  const endPeerConnection = useCallback((otherPeerId) => {
+        setConnectedPeers((prevConnectedPeers) =>
+          prevConnectedPeers.filter((peer) => peer.otherPeerId !== otherPeerId)
+        );
+
+        if (pcRef.current) {
+          pcRef.current.close();
+          pcRef.current = null;
+        }
+        if (otherPeerRef.current && otherPeerRef.current.peerId === otherPeerId) {
+          otherPeerRef.current = null;
+        }
+  }, []);
 
   useEffect(() => {
     const start = async () => {
@@ -208,6 +214,7 @@ export const App = () => {
 
         srrRef.current = srr;
         srr.onNotification(onSocketNotification);
+        srr.onRequest(onSocketRequest);
         srr.onClose(() => {
           console.error('web socket connection closed');
         });
@@ -219,19 +226,20 @@ export const App = () => {
 
         localStreamRef.current = localStream;
 
-        if (selfVideoRef.current) selfVideoRef.current.srcObject = localStream;
+        if (peerVideoRef.current) peerVideoRef.current.srcObject = localStream;
 
         const name = generateName();
-        setSelfName(name);
 
         await srr.request('JOIN_WEBRTC', { name });
+
+        setPeerName(name);
 
       } catch (error) {
         console.log(error);
       }
     };
 
-    start().catch((error) => console.error('Error in start(): ', error));
+    start().catch((error) => console.error('Error in App useEffect: ', error));
 
     return () => {
       if (pcRef.current) pcRef.current.close();
@@ -239,24 +247,36 @@ export const App = () => {
       if (localStreamRef.current)
         localStreamRef.current.getTracks().forEach((track) => track.stop());
     };
-  }, [onSocketNotification]);
+  }, [onSocketNotification, setPeerName, onSocketRequest, updateOnlinePeersState]);
 
   return (
     <div id="app-container">
       <div id="app-display">
-        <Peer peerName={selfName} peerVideoRef={selfVideoRef} isSelf={true} />
+        <Peer peerName={peerName} peerVideoRef={peerVideoRef} isSelf={true} />
         <hr />
-        <Peer
-          peerName={otherPeerName}
-          peerVideoRef={otherPeerVideoRef}
-          peerAudioRef={otherPeerAudioRef}
-        />
+        {
+          connectedPeers.map(({otherPeerId, otherPeerName, isPcSendingOffer}) => (
+            <OtherPeer
+              key={otherPeerId}
+              otherPeerId={otherPeerId}
+              otherPeerName={otherPeerName}
+              isPcSendingOffer={isPcSendingOffer}
+              subscribeToSignalling={subscribeToSignalling}
+              unSuscribeFromSignalling={unSuscribeFromSignalling}
+              endConnection={() => endPeerConnection(otherPeerId)}
+              localStreamRef={localStreamRef}
+              iceServers={iceServers}
+              srrRef={srrRef}
+            />
+          ))
+        }
       </div>
       <OnlinePeers
         onlinePeers={onlinePeersState}
         selectedPeerId={selectedPeerId}
         changeCheckBoxValue={changeCheckBoxValue}
         connectToSelectedPeer={connectToSelectedPeer}
+        connectedPeers={connectedPeers.map(peer => peer.otherPeerId)}
       />
     </div>
   );

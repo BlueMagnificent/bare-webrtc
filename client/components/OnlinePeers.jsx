@@ -3,6 +3,7 @@ export const OnlinePeers = ({
   selectedPeerId,
   changeCheckBoxValue,
   connectToSelectedPeer,
+  connectedPeers = [],
 }) => {
   return (
     <div id="app-control">
@@ -21,6 +22,7 @@ export const OnlinePeers = ({
                   onChange={(e) =>
                     changeCheckBoxValue(peerId, e.target.checked)
                   }
+                  disabled={connectedPeers.includes(peerId)}
                 />
                 &nbsp;&nbsp;
                 <span>{peerName}</span>
