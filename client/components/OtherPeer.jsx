@@ -143,14 +143,14 @@ export const OtherPeer = ({
 
         } catch (err) {
           console.error(`Error creating offer to ${otherPeerId}: `, err);
-          endConnection();
+          endConnection(otherPeerId);
         }
       }
     };
 
     start().catch((err) => {
       console.error('Error in OtherPeer useEffect: ', err);
-      endConnection();
+      endConnection(otherPeerId);
     });
 
     return () => {

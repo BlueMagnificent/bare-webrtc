@@ -263,7 +263,7 @@ export const App = () => {
               isPcSendingOffer={isPcSendingOffer}
               subscribeToSignalling={subscribeToSignalling}
               unSuscribeFromSignalling={unSuscribeFromSignalling}
-              endConnection={() => endPeerConnection(otherPeerId)}
+              endConnection={endPeerConnection}
               localStreamRef={localStreamRef}
               iceServers={iceServers}
               srrRef={srrRef}
