@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Peer } from './Peer';
-import { LoadingOverlay } from './LoadingOverlay';
 
 export const OtherPeer = ({
   otherPeerId,
@@ -168,8 +167,7 @@ export const OtherPeer = ({
   
   return (
     <>
-      {isConnecting && <LoadingOverlay />}
-      <Peer peerName={otherPeerName} peerVideoRef={otherPeerVideoRef} />
+      <Peer isConnecting={isConnecting} peerName={otherPeerName} peerVideoRef={otherPeerVideoRef} />
     </>
   )
 };
