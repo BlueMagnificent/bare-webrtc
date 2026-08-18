@@ -254,6 +254,7 @@ export const App = () => {
       <div id="app-display">
         <Peer peerName={peerName} peerVideoRef={peerVideoRef} isSelf={true} />
         <hr />
+        <div className ="other-peers-container">
         {
           connectedPeers.map(({otherPeerId, otherPeerName, isPcSendingOffer}) => (
             <OtherPeer
@@ -270,6 +271,8 @@ export const App = () => {
             />
           ))
         }
+            
+        </div>
       </div>
       <OnlinePeers
         onlinePeers={onlinePeersState}
