@@ -84,11 +84,17 @@ export const App = () => {
           if(otherPeerRef.current && otherPeerRef.current.peerId === peerId) {
             otherPeerRef.current = null;
 
-            if (pcRef.current) pcRef.current.close();
+            if (pcRef.current) {
+              pcRef.current.close();
+              pcRef.current = null;
+            }
           }
 
           onlinePeers.delete(peerId);
           updateOnlinePeersState();
+          setConnectedPeers((prevConnectedPeers) =>
+            prevConnectedPeers.filter((peer) => peer.otherPeerId !== peerId)
+          );
           break;
         }
 
@@ -255,22 +261,22 @@ export const App = () => {
         <Peer peerName={peerName} peerVideoRef={peerVideoRef} isSelf={true} />
         <hr />
         <div className ="other-peers-container">
-        {
-          connectedPeers.map(({otherPeerId, otherPeerName, isPcSendingOffer}) => (
-            <OtherPeer
-              key={otherPeerId}
-              otherPeerId={otherPeerId}
-              otherPeerName={otherPeerName}
-              isPcSendingOffer={isPcSendingOffer}
-              subscribeToSignalling={subscribeToSignalling}
-              unSuscribeFromSignalling={unSuscribeFromSignalling}
-              endConnection={endPeerConnection}
-              localStreamRef={localStreamRef}
-              iceServers={iceServers}
-              srrRef={srrRef}
-            />
-          ))
-        }
+          {
+            connectedPeers.map(({otherPeerId, otherPeerName, isPcSendingOffer}) => (
+              <OtherPeer
+                key={otherPeerId}
+                otherPeerId={otherPeerId}
+                otherPeerName={otherPeerName}
+                isPcSendingOffer={isPcSendingOffer}
+                subscribeToSignalling={subscribeToSignalling}
+                unSuscribeFromSignalling={unSuscribeFromSignalling}
+                endConnection={endPeerConnection}
+                localStreamRef={localStreamRef}
+                iceServers={iceServers}
+                srrRef={srrRef}
+              />
+            ))
+          }
             
         </div>
       </div>

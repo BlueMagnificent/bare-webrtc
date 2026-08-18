@@ -18,7 +18,7 @@ export const OnlinePeers = ({
               <div key={peerId} style={{ width: '100%', marginTop: '5px' }}>
                 <input
                   type="checkbox"
-                  checked={peerId == selectedPeerId}
+                  checked={peerId == selectedPeerId || connectedPeers.includes(peerId)}
                   onChange={(e) =>
                     changeCheckBoxValue(peerId, e.target.checked)
                   }

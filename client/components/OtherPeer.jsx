@@ -33,30 +33,43 @@ export const OtherPeer = ({
         .forEach((track) => pc.addTrack(track, localStreamRef.current));
     }
 
-    pc.onicecandidate = (event) => {
+    pc.addEventListener('icecandidate', (event) => {
       srrRef.current.notify('WEBRTC_ICE_CANDIDATE', {
         candidate: event.candidate,
         otherPeerId,
       });
-    };
+    });
 
-    pc.oniceconnectionstatechange = (event) => {
+    pc.addEventListener('iceconnectionstatechange', (event) => {
       if (pcRef.current) {
         console.log(`ICE state: ${pcRef.current.iceConnectionState}`);
         console.log('ICE state change event: ', event);
       }
-    };
+    });
 
-    pc.ontrack = (event) => {
+    pc.addEventListener('connectionstatechange', () => {
+      if (pcRef.current) {
+        console.log(`Peer connection state: ${pcRef.current.connectionState}`);
+
+        const connState = pcRef.current.connectionState;
+
+        if (connState === 'disconnected' || connState === 'failed' || connState === 'closed') {
+          console.log(`Peer connection with ${otherPeerId} has been closed or failed. Ending connection.`);
+          endConnection(otherPeerId);
+        }
+      }
+    });
+
+    pc.addEventListener('track', (event) => {
       if (otherPeerVideoRef.current === null) return;
 
       otherPeerVideoRef.current.srcObject = event.streams[0];
 
       setIsConnecting(false);
-    };
+    });
 
     return pc;
-  }, [localStreamRef, iceServers, otherPeerId, srrRef]);
+  }, [localStreamRef, iceServers, otherPeerId, srrRef, endConnection]);
 
   const messageHandler = useCallback(async (method, data) => {
 
